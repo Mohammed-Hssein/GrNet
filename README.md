@@ -9,4 +9,4 @@ Paper : <a href="https://arxiv.org/pdf/1611.05742.pdf"> Building deep networks o
 
 Dataset : mnist dataset
 
-PCA applied to mnist dataset \textit{euclidean data} so input images are of size $(28, 10)$ \textit{grassmannian data}.
+PCA applied to mnist dataset $\textit{euclidean data}$ so input images are of size $(28, 10)$ $\textit{grassmannian data}$.
