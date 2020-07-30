@@ -21,15 +21,19 @@ from torch.nn.modules.module import Module
     Check the backward loops : maybe some matmul are still valid for 3d tensors
     and then it cans reduce the complexity from O(N*N) to O(N)
 """
+
+use_cuda = torch.cuda.is_available()
+tenType = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+ 
 class ReOrthMap(Function):
     
     @staticmethod
     def forward(self, input):
-        
-        Qs = torch.zeros_like(input)
-        Rs = torch.zeros((input.shape[0], input.shape[2], input.shape[2]))
-        Rs_inv = torch.zeros((input.shape[0], input.shape[2], input.shape[2]))
-        Ss = torch.zeros((input.shape[0], input.shape[1], input.shape[1]))
+        input = input.type(tenType)
+        Qs = torch.zeros_like(input).type(tenType)
+        Rs = torch.zeros((input.shape[0], input.shape[2], input.shape[2])).type(tenType)
+        Rs_inv = torch.zeros((input.shape[0], input.shape[2], input.shape[2])).type(tenType)
+        Ss = torch.zeros((input.shape[0], input.shape[1], input.shape[1])).type(tenType)
         for i in range(input.shape[0]):
             Q, R = torch.qr(input[i, :, :], some=True)
             R_inv = torch.inverse(R)
@@ -43,14 +47,14 @@ class ReOrthMap(Function):
         #self.Rs = Rs
         self.Rs_inv = Rs_inv
         self.Ss = Ss
-        self.save_for_backward(input)
+        #self.save_for_backward(input)
         return Qs
     
     @staticmethod      
     def backward(self, grad_outputs):
         
-        dLdQ = grad_outputs
-        grad = torch.zeros_like(grad_outputs) #grad and gradout same dims
+        dLdQ = grad_outputs.type(tenType)
+        grad = torch.zeros_like(grad_outputs).type(tenType) #grad and gradout same dims
         
         for i in range(dLdQ.shape[0]):
             ele_1 = torch.matmul(self.Ss[i, :, :].transpose(0,1), dLdQ[i, :, :])
@@ -67,10 +71,11 @@ class OrthMapLayer(Function):
     @staticmethod
     def forward(self, input):
         #q = 10
-        Us = torch.zeros_like(input)
-        Sigs = torch.zeros((input.shape[0], input.shape[1]))
-        Uts = torch.zeros_like(input)
-        outs = torch.zeros((input.shape[0], input.shape[1], 10))
+        input = input.type(tenType)
+        Us = torch.zeros_like(input).type(tenType)
+        Sigs = torch.zeros((input.shape[0], input.shape[1])).type(tenType)
+        Uts = torch.zeros_like(input).type(tenType)
+        outs = torch.zeros((input.shape[0], input.shape[1], 10)).type(tenType)
         for i in range(input.shape[0]):
             U, Sig, Ut = torch.svd(input[i, :, :])
             Us[i, :, :]=U
@@ -86,9 +91,9 @@ class OrthMapLayer(Function):
     @staticmethod
     def backward(self, grad_outputs):
         
-        dLdU = grad_outputs #needs concatenation of zeros to complete [bs, d1, d1]
-        Ks = torch.zeros((dLdU.shape[0], dLdU.shape[1], dLdU.shape[1]))
-        grad = torch.zeros((dLdU.shape[0], dLdU.shape[1], 12))
+        dLdU = grad_outputs.type(tenType) #needs concatenation of zeros to complete [bs, d1, d1]
+        Ks = torch.zeros((dLdU.shape[0], dLdU.shape[1], dLdU.shape[1])).type(tenType)
+        grad = torch.zeros((dLdU.shape[0], dLdU.shape[1], 12)).type(tenType)
         for i in range(dLdU.shape[0]):
             diag = self.Sigs[i, :]
             diag = diag.contiguous()
@@ -101,8 +106,8 @@ class OrthMapLayer(Function):
             #temp = torch.cat((dLdU[i, :, :], torch.zeros((dLdU[i, :, :].shape[0], 
             #                                              dLdU[i, :, :].shape[0]-10))),dim=1)
             temp = dLdU[i, :, :]
-            temp = torch.matmul(self.Uts[i, :, :], temp)
-            temp = torch.cat((temp, torch.zeros((12, 2))), dim=1)
+            temp = torch.matmul(self.Uts[i, :, :], temp).type(tenType)
+            temp = torch.cat((temp, torch.zeros((12, 2), dtype=torch.float32)), dim=1)
             temp = K*temp
             temp = torch.matmul(self.Us[i, :, :], temp)
             temp = torch.matmul(temp, self.Uts[i, :, :])
@@ -133,16 +138,18 @@ def retraction(W, EucGrad, lr):
     return W - lr*ReimGrad
 """
 
+
 def call_Reimann_grad(W, EucGrad):
     '''
     W : weight
     EucGrad : euclidean grad
     '''
-    EucGradT = EucGrad.transpose()
+    EucGradT = EucGrad.astype(np.double).transpose()
+    W = W.astype(np.double)
     U, _, V = np.linalg.svd(np.dot(W, EucGradT))
     Q = np.dot(V, U.transpose())
     Rgrad = np.dot(EucGradT, Q) - W.transpose()
-    return Rgrad
+    return Rgrad.astype(np.double)
 
 def update_params_model(W, EucGrad, lr):
     '''
@@ -151,7 +158,7 @@ def update_params_model(W, EucGrad, lr):
     '''
     ReimGrad = call_Reimann_grad(W, EucGrad)
     ReimGrad = ReimGrad.transpose()
-    return W - lr*ReimGrad
+    return W.astype(np.double) - lr*ReimGrad
 
 def sum_tensors(list_samples):
     '''
@@ -161,6 +168,42 @@ def sum_tensors(list_samples):
     for i in range(1, n):
         X = torch.add(X, list_samples[i])
     return (1/n)*X
+
+
+#--------------------------------------------------------------------#
+#  use weight matrices just full row rank
+#  ===> construct by taking orthogonal of emppty torch
+#--------------------------------------------------------------------#
+def call_Reimann_grad_v2(W, EucGrad):
+    '''
+    '''
+    Wt_W = np.matmul(W.transpose(), W)
+    Reim_grad = np.matmul(EucGrad, Wt_W)
+    Reim_grad = EucGrad - Reim_grad
+    return Reim_grad
+
+def retraction(X):
+    '''
+    Projecto onto the manifold of fixed rank matrices
+    Projection = sum of ui.vi.T for rank r first terms
+    '''
+    u, d, v = np.linalg.svd(X)
+    rank = np.linalg.matrix_rank(X)
+    # to chkck d[0] or abs(d[0])
+    x = d[0]*np.matmul(np.expand_dims(u[:, 0], axis = 1), np.expand_dims(v[:, 0].transpose(), axis=0))
+    for i in range(1, rank):
+        x += d[i]*np.matmul(np.expand_dims(u[:, i], axis = 1), np.expand_dims(v[:, i].transpose(), axis=0))
+    
+    return x
+
+def update_params_model_v2(W, EucGrad, lr):
+    '''
+    '''
+    reim_grad = call_Reimann_grad_v2(W, EucGrad)
+    w = retraction(W - lr*reim_grad)
+    return w
+
+#--------------------------------------------------------------------#
 
 """
 tensor = np.load('./data/grassmann/X_grassmann_test.npy')[0].astype(np.float32)
@@ -173,4 +216,15 @@ tensor.shape
 Out[18]: torch.Size([1, 28, 10])
 
 inp = tensor[:, 0:12, :]
+
+>>> import pickle
+>>> l = [1,2,3,4]
+>>> with open("test.txt", "wb") as fp:   #Pickling
+...   pickle.dump(l, fp)
+... 
+>>> with open("test.txt", "rb") as fp:   # Unpickling
+...   b = pickle.load(fp)
+... 
+>>> b
+[1, 2, 3, 4]
 """

@@ -12,6 +12,10 @@ from torch.autograd import Variable
 import numpy as np
 import utils_model as utils
 
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda" if use_cuda else "cpu")
+tenType = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+
 
 class GrNetwork(torch.nn.Module):
     
@@ -29,16 +33,18 @@ class GrNetwork(torch.nn.Module):
         """
         self.filter_weights = []
         for i in range(16):
-            self.filter_weights.append(torch.load('./data/weights/W')[i])
-            self.filter_weights[i] = Variable(self.filter_weights[i], requires_grad=True)
+            self.filter_weights.append(torch.load('./data/weights/W')[i].type(tenType))
+            self.filter_weights[i] = Variable(self.filter_weights[i], requires_grad=True).to(device)
         #self.W_1 = Variable(self.filter_weights[0], requires_grad = True)
         #W_1 = filter_weights[0]
-        self.fc_w = Variable(torch.randn((144, 10)) , requires_grad = True)
-    
+        #self.fc_w = Variable(torch.randn((144, 10)).type(tenType) , requires_grad = True)
+        self.fc_w = Variable(torch.load('./data/weights/FC'), requires_grad = True).to(device)
+        #self.bias = Variable(torch.load('./data/weights/bias'), requires_grad = True)
     def forward(self, input):
         '''
         forward pass 1 block
         '''
+        input = input.type(tenType)
         batch_size = input.shape[0]
         #W1_c = self.W_1.contiguous()
         W1_c = []
@@ -63,7 +69,7 @@ class GrNetwork(torch.nn.Module):
         
         FC = X6.view([batch_size, -1])
         out = torch.matmul(FC, self.fc_w)
-        
+        #out = out + self.bias
         return out
     
     def update_params(self, lr):
@@ -80,19 +86,23 @@ class GrNetwork(torch.nn.Module):
         #new_W1 = utils.update_params_model(W1_np, eugrad_W1,lr)
         new_W1 = []
         for i in range(16):
-            new_W1.append(utils.update_params_model(W1_np[i], eugrad_W1[i],lr))
+            new_W1.append(utils.update_params_model_v2(W1_np[i], eugrad_W1[i],lr))
             
         #update the weights
         for i in range(16):
-            #self.W_1.data.copy_(torch.DoubleTensor(new_W1))
-            self.filter_weights[i].data.copy_(torch.DoubleTensor(new_W1[i]))
-        self.fc_w.data -= lr * self.fc_w.grad.data
+            #self.W_1.data.copy_(tenType(new_W1))
+            self.filter_weights[i].data.copy_(tenType(new_W1[i]))
+            #self.filter_weights[i].data.copy_(torch.FloatTensor(new_W1[i]))
+
         
+        self.fc_w.data -= lr * self.fc_w.grad.data
+        #self.bias -= lr*self.bias.grad.data
         #set gradients to zero manually
         for i in range(16):
             self.filter_weights[i].grad.data.zero_()
         #self.W_1.grad.data.zero_()
         self.fc_w.grad.data.zero_()
+        #self.bias.grad.data.zero_()
 
     
 """
