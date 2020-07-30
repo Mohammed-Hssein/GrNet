@@ -1,5 +1,5 @@
 --
-# GrNet architecture
+# GrNet architecture on grassmanian mnist dataset
 --
 <img src="https://github.com/Mohammed-Hssein/GrNet/blob/master/utils/GrNet.png">
 
