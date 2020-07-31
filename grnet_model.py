@@ -9,19 +9,21 @@ Created on Fri Jul 24 21:45:05 2020
 
 import torch
 from torch.autograd import Variable
+import torch.nn.functional as F
 import numpy as np
 import utils_model as utils
 
 use_cuda = torch.cuda.is_available()
-device = torch.device("cuda" if use_cuda else "cpu")
+#device = torch.device("cuda" if use_cuda else "cpu")
 tenType = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
 
 class GrNetwork(torch.nn.Module):
     
-    def __init__(self):
+    def __init__(self, num_classes):
         super(GrNetwork, self).__init__()
-        self.num_filters = 16
+        self.num_filters = 9
+        self.num_classes = num_classes
         """
         initialize for once full rank matrices and load them for ones
         ===> reduces complexity
@@ -30,15 +32,24 @@ class GrNetwork(torch.nn.Module):
         then generalize for 16
         
         d1 = 12, d0 = 28, q = 10
+        
+        ===> change matrix weights fc_w
         """
         self.filter_weights = []
-        for i in range(16):
+        for i in range(self.num_filters):
             self.filter_weights.append(torch.load('./data/weights/W')[i].type(tenType))
-            self.filter_weights[i] = Variable(self.filter_weights[i], requires_grad=True).to(device)
+            self.filter_weights[i] = Variable(self.filter_weights[i], requires_grad=True)
         #self.W_1 = Variable(self.filter_weights[0], requires_grad = True)
         #W_1 = filter_weights[0]
         #self.fc_w = Variable(torch.randn((144, 10)).type(tenType) , requires_grad = True)
-        self.fc_w = Variable(torch.load('./data/weights/FC'), requires_grad = True).to(device)
+        if self.num_classes == 10:
+            self.fc_w = Variable(torch.load('./data/weights/FC'), requires_grad = True)
+        if self.num_classes == 3:
+            self.fc_w = Variable(torch.load('./data/weights/FC_3'), requires_grad = True)
+        if self.num_classes == 2:
+            self.fc_w = Variable(torch.load('./data/weights/FC_2'), requires_grad = True)
+
+
         #self.bias = Variable(torch.load('./data/weights/bias'), requires_grad = True)
     def forward(self, input):
         '''
@@ -50,7 +61,7 @@ class GrNetwork(torch.nn.Module):
         W1_c = []
         W1 = []
         X1 = []
-        for i in range(16):
+        for i in range(self.num_filters):
             W1_c.append(self.filter_weights[i].contiguous())
             W1.append(W1_c[i].view([1, W1_c[i].shape[0], W1_c[i].shape[1]]))
             X1.append(torch.matmul(W1[i], input))
@@ -68,8 +79,8 @@ class GrNetwork(torch.nn.Module):
         X6 = torch.matmul(X5, X5.transpose(1, 2))
         
         FC = X6.view([batch_size, -1])
+        #out = torch.add(torch.matmul(FC, self.fc_w), self.bias)
         out = torch.matmul(FC, self.fc_w)
-        #out = out + self.bias
         return out
     
     def update_params(self, lr):
@@ -78,18 +89,18 @@ class GrNetwork(torch.nn.Module):
         '''
         #get weights and euclidean gradients in np forms
         #eugrad_W1 = self.W_1.grad.data.numpy()
-        eugrad_W1 = [self.filter_weights[i].grad.data.numpy() for i in range(16)]
+        eugrad_W1 = [self.filter_weights[i].grad.data.numpy() for i in range(self.num_filters)]
         #W1_np = self.W_1.data.numpy()
-        W1_np = [self.filter_weights[i].data.numpy() for i in range(16)]
+        W1_np = [self.filter_weights[i].data.numpy() for i in range(self.num_filters)]
         
         #new weihgts updated
         #new_W1 = utils.update_params_model(W1_np, eugrad_W1,lr)
         new_W1 = []
-        for i in range(16):
+        for i in range(self.num_filters):
             new_W1.append(utils.update_params_model_v2(W1_np[i], eugrad_W1[i],lr))
             
         #update the weights
-        for i in range(16):
+        for i in range(self.num_filters):
             #self.W_1.data.copy_(tenType(new_W1))
             self.filter_weights[i].data.copy_(tenType(new_W1[i]))
             #self.filter_weights[i].data.copy_(torch.FloatTensor(new_W1[i]))
@@ -98,7 +109,7 @@ class GrNetwork(torch.nn.Module):
         self.fc_w.data -= lr * self.fc_w.grad.data
         #self.bias -= lr*self.bias.grad.data
         #set gradients to zero manually
-        for i in range(16):
+        for i in range(self.num_filters):
             self.filter_weights[i].grad.data.zero_()
         #self.W_1.grad.data.zero_()
         self.fc_w.grad.data.zero_()
