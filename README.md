@@ -14,3 +14,6 @@ PCA applied to mnist dataset (***euclidean data***) so input images are of size 
 working to improve accuracy with params tunning. Accuracy obtained near 75%
 
 <img src="https://github.com/Mohammed-Hssein/GrNet/blob/master/utils/accuracy%3Df(filters)_dotted.png" width = 700px, heigh = 400px>
+
+<img src="https://github.com/Mohammed-Hssein/GrNet/blob/master/utils/accuracy_f(num_layers).png" width = 700px, heigh = 400px>
+
