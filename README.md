@@ -1,6 +1,9 @@
 --
-# GrNet architecture on grassmanian mnist dataset
+# GrNet architecture
 --
+### Grassmannian mnist dataset
+--
+
 <img src="https://github.com/Mohammed-Hssein/GrNet/blob/master/utils/GrNet.png">
 
 ---
