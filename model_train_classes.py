@@ -14,7 +14,7 @@ Training the network on number of epochs
 import numpy as np
 import random
 import os
-import grnet_model as grnet
+import grnet_model_plus_linear as grnet
 from torch.autograd import Variable
 import torch
 import datetime
@@ -23,30 +23,31 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-
 batch_size = 30
-lr = 0.01
-#decay = 0.9
+lr = 1
+#decay = 0.99
 num_epoch = 10
 
-train_images = np.load('./data/train_classes_01.npy') 
-train_labels = np.load('./data/label_classes_01.npy')
+train_images = np.load('./data/grassmann/X_grassmann_train.npy') 
+train_labels = np.load('./data/grassmann/train_labels.npy')
 len_training = train_labels.shape[0]
 
 
-#model = torch.load('./tmp/mnist/grnet_1c.model')
+#
+#model = torch.load('./tmp/mnist/results_10_lr_08/grnet_10c.model')
 hist_loss = []
+hist_accuracy = []
 time_per_epoch = []
 time_per_iter = []
 
 #use_cuda = torch.cuda.is_available()
 #device = torch.device("cuda" if use_cuda else "cpu")
-model = grnet.GrNetwork(num_classes=2)
+model = grnet.GrNetwork(num_classes=10)
 #model.to(device)
 
 for epoch in range(num_epoch):
     shuffled_index = list(range(train_labels.shape[0]))
-    random.seed(6666)
+    random.seed(666)
     random.shuffle(shuffled_index) #L list of shuffled index now is suffled_index
     
     for idx_train in range(0, len_training//batch_size):
@@ -63,41 +64,38 @@ for epoch in range(num_epoch):
         target = Variable(torch.LongTensor(batch_label_data))
         
         stime = datetime.datetime.now()
-        logits = model(input)
-        output = F.log_softmax(logits, dim=-1)
+        #logits = model(input)
+        #output = F.log_softmax(logits, dim=-1)
+        output = model(input)
         loss = F.nll_loss(output, target)
         
         # get the index of the max log-probability ==> index of right class
         pred = output.data.max(1, keepdim=True)[1]
-        correct = pred.eq(target.data.view_as(pred)).long().sum()
+        #correct = pred.eq(target.data.view_as(pred)).long().sum()
+        correct = pred.eq(target.data.view_as(pred)).long().sum().item()
+        hist_accuracy.append((correct/batch_size)*100)
         
         loss.backward()
-        #lr = lr/(decay * idx)
+        #lr = lr/(decay * (idx+1))
         model.update_params(lr)
         etime = datetime.datetime.now()
-        dtime = etime.second - stime.second
+        #dtime = etime.second - stime.second
+        dtime = etime.second + etime.microsecond*(10**(-6)) - (stime.second + stime.microsecond*(10**(-6)))
         time_per_iter.append(dtime)
         hist_loss.append(loss.item())
         
         print('[epoch %d/%d] [iter %d/%d] loss %f acc %f %f/batch' % (epoch, num_epoch,
                             idx_train, len_training // batch_size, loss.item(),
-                            correct / batch_size, dtime))
-        """
-        del etime
-        del dtime
-        del input
-        del target
-        del logits
-        del output
-        del loss
-        del pred
-        del correct
-        """
+                            (correct / batch_size)*100, dtime))
+
     #Epoch finished
     time_per_epoch.append(time_per_iter)
     if not os.path.exists('./tmp/mnist'):
         os.makedirs('./tmp/mnist')
-    plt.plot(list(range(len(hist_loss))), hist_loss)
+    
+    plt.plot(list(range(len(hist_loss))), hist_loss, label="Loss")
+    plt.plot(list(range(len(hist_accuracy))), hist_accuracy, label="Accuracy training data")
+    plt.legend(loc='upper left')
     torch.save(model, './tmp/mnist/grnet_' + str(epoch + 1) + 'c.model')
     plt.savefig('./tmp/mnist/loss_c.jpg')
     plt.close()

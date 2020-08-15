@@ -22,8 +22,9 @@ from torch.nn.modules.module import Module
     and then it cans reduce the complexity from O(N*N) to O(N)
 """
 
-use_cuda = torch.cuda.is_available()
-tenType = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+#use_cuda = torch.cuda.is_available()
+#tenType = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+tenType = torch.FloatTensor
  
 class ReOrthMap(Function):
     
@@ -149,6 +150,7 @@ def call_Reimann_grad(W, EucGrad):
     U, _, V = np.linalg.svd(np.dot(W, EucGradT))
     Q = np.dot(V, U.transpose())
     Rgrad = np.dot(EucGradT, Q) - W.transpose()
+    Rgrad = Rgrad/np.linalg.norm(Rgrad)
     return Rgrad.astype(np.double)
 
 def update_params_model(W, EucGrad, lr):
@@ -170,6 +172,12 @@ def sum_tensors(list_samples):
     return (1/n)*X
 
 
+def U_svd(matrix):
+    '''
+    return the 10 fisrt largest eigen vectors
+    '''
+    U = np.linalg.svd(matrix)[0]
+    return U[:, 0:10]
 #--------------------------------------------------------------------#
 #  use weight matrices just full row rank
 #  ===> construct by taking orthogonal of emppty torch

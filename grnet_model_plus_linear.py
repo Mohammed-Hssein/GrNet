@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Fri Jul 24 21:45:05 2020
+Created on Mon Aug  3 12:48:58 2020
 
 @author: mohammedhssein
 """
@@ -22,8 +22,8 @@ class GrNetwork(torch.nn.Module):
     
     def __init__(self, num_classes):
         super(GrNetwork, self).__init__()
-        self.num_filters = 9
         self.num_classes = num_classes
+        self.num_filters = self.num_classes 
         """
         initialize for once full rank matrices and load them for ones
         ===> reduces complexity
@@ -36,12 +36,14 @@ class GrNetwork(torch.nn.Module):
         ===> change matrix weights fc_w
         """
         self.filter_weights = []
+        self.layer_wieights = []
         for i in range(self.num_filters):
-            self.filter_weights.append(torch.load('./data/weights/W')[i].type(tenType))
+            self.filter_weights.append(torch.load('./data/weights/filters')[i].type(tenType))
             self.filter_weights[i] = Variable(self.filter_weights[i], requires_grad=True)
         #self.W_1 = Variable(self.filter_weights[0], requires_grad = True)
         #W_1 = filter_weights[0]
         #self.fc_w = Variable(torch.randn((144, 10)).type(tenType) , requires_grad = True)
+        """
         if self.num_classes == 10:
             self.fc_w = Variable(torch.load('./data/weights/FC'), requires_grad = True)
         if self.num_classes == 3:
@@ -49,8 +51,22 @@ class GrNetwork(torch.nn.Module):
         if self.num_classes == 2:
             self.fc_w = Variable(torch.load('./data/weights/FC_2'), requires_grad = True)
 
-
+        self.bias = Variable(torch.randn((1, 2)), requires_grad = True)
         #self.bias = Variable(torch.load('./data/weights/bias'), requires_grad = True)
+        """
+        self.fc_w1 = Variable(torch.randn(144, 10), requires_grad = True)
+        self.fc_b1 = Variable(torch.randn(1, 10), requires_grad = True)
+        
+        """
+        self.fc_w2 = Variable(torch.randn(72, 2), requires_grad = True)
+        self.fc_b2 = Variable(torch.randn(1, 2), requires_grad = True)
+        
+        self.fc_w3 = Variable(torch.randn(36, 12), requires_grad = True)
+        self.fc_b3 = Variable(torch.randn(1, 12), requires_grad = True)
+        
+        self.fc_w4 = Variable(torch.randn(12, 2), requires_grad = True)
+        self.fc_b4 = Variable(torch.randn(1, 2), requires_grad = True)
+        """
     def forward(self, input):
         '''
         forward pass 1 block
@@ -79,9 +95,26 @@ class GrNetwork(torch.nn.Module):
         X6 = torch.matmul(X5, X5.transpose(1, 2))
         
         FC = X6.view([batch_size, -1])
-        #out = torch.add(torch.matmul(FC, self.fc_w), self.bias)
-        out = torch.matmul(FC, self.fc_w)
-        return out
+        
+        logits = torch.add(torch.matmul(FC, self.fc_w1), self.fc_b1)
+        output = F.log_softmax(logits, dim=-1)
+        """
+        logits = F.relu(logits)
+        
+        logits = torch.add(torch.matmul(logits, self.fc_w2), self.fc_b2)
+        
+        output = F.log_softmax(logits, dim=-1)
+        
+        logits = F.relu(logits)
+        
+        logits = torch.add(torch.matmul(logits, self.fc_w3), self.fc_b3)
+        logits = F.relu(logits)
+        
+        logits = torch.add(torch.matmul(logits, self.fc_w4), self.fc_b4)
+        #logits = torch.matmul(FC, self.fc_w)
+        output = F.log_softmax(logits, dim=-1)
+        """
+        return output
     
     def update_params(self, lr):
         '''
@@ -97,7 +130,7 @@ class GrNetwork(torch.nn.Module):
         #new_W1 = utils.update_params_model(W1_np, eugrad_W1,lr)
         new_W1 = []
         for i in range(self.num_filters):
-            new_W1.append(utils.update_params_model_v2(W1_np[i], eugrad_W1[i],lr))
+            new_W1.append(utils.update_params_model(W1_np[i], eugrad_W1[i],lr))
             
         #update the weights
         for i in range(self.num_filters):
@@ -105,15 +138,38 @@ class GrNetwork(torch.nn.Module):
             self.filter_weights[i].data.copy_(tenType(new_W1[i]))
             #self.filter_weights[i].data.copy_(torch.FloatTensor(new_W1[i]))
 
-        
-        self.fc_w.data -= lr * self.fc_w.grad.data
+        with torch.no_grad():
+            """
+            self.fc_w4.data -= lr * self.fc_w4.grad.data
+            self.fc_b4 -= lr*self.fc_b4.grad.data
+            
+            self.fc_w3.data -= lr * self.fc_w3.grad.data
+            self.fc_b3 -= lr*self.fc_b3.grad.data
+            
+            self.fc_w2.data -= lr * self.fc_w2.grad.data
+            self.fc_b2 -= lr*self.fc_b2.grad.data        
+            """
+            self.fc_w1.data -= lr * self.fc_w1.grad.data
+            self.fc_b1 -= lr*self.fc_b1.grad.data        
         #self.bias -= lr*self.bias.grad.data
+        
         #set gradients to zero manually
         for i in range(self.num_filters):
             self.filter_weights[i].grad.data.zero_()
         #self.W_1.grad.data.zero_()
-        self.fc_w.grad.data.zero_()
-        #self.bias.grad.data.zero_()
+        self.fc_w1.grad.data.zero_()
+        self.fc_b1.grad.data.zero_()
+        
+        """
+        self.fc_w2.grad.data.zero_()
+        self.fc_b2.grad.data.zero_()
+        
+        self.fc_w3.grad.data.zero_()
+        self.fc_b3.grad.data.zero_()
+        
+        self.fc_w4.grad.data.zero_()
+        self.fc_b4.grad.data.zero_()
+        """
 
     
 """
@@ -134,6 +190,3 @@ target[0][1] = 3
 loss = torch.nn.functional.mse_loss(output, target)
 
 """
-    
-
-
