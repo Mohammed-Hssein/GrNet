@@ -20,6 +20,6 @@ working to improve accuracy with params tunning. Accuracy obtained near 75%
 
 <img src="https://github.com/Mohammed-Hssein/GrNet/blob/master/utils/accuracy_f(num_layers).png" width = 700px, heigh = 400px>
 
----
-To launch training just run the main file "model_train_classes"
----
+
+**To launch training just run the main file "model_train_classes.py"**
+
