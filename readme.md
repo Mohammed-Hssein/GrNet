@@ -4,7 +4,7 @@
 ### Grassmannian mnist dataset
 --
 
-<img src="https://github.com/Mohammed-Hssein/GrNet/blob/master/GrNet.png">
+<img src="https://github.com/Mohammed-Hssein/GrNet/blob/main/GrNet.png">
 
 ---
 Paper : <a href="https://arxiv.org/pdf/1611.05742.pdf"> Building deep networks on grassmann manifolds </a>
